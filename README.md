@@ -26,9 +26,6 @@ This system uses AI to:
 * AI: Gemini API
 * Parsing: pdfplumber, python-docx
 
-## 🚧 Current Status
-
-Day 0 – Project Setup
 
 ## 📌 Features (Planned)
 
@@ -37,6 +34,4 @@ Day 0 – Project Setup
 * Candidate ranking dashboard
 * AI-based fit explanation
 
-## 👨‍💻 Author
 
-Your Name
