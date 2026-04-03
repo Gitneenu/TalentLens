@@ -16,3 +16,8 @@ backend/venv/
 # Ignore environment variables (if you create a .env file later)
 .env
 Testing
+sample.pdf
+sample.docx
+sample.png
+resume.pdf
+test.py
