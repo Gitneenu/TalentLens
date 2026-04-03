@@ -26,7 +26,6 @@ This system uses AI to:
 * AI: Gemini API
 * Parsing: pdfplumber, python-docx
 
-
 ## 📌 Features (Planned)
 
 * Resume upload & parsing
@@ -35,3 +34,4 @@ This system uses AI to:
 * AI-based fit explanation
 
 
+Niranjana Ramesh

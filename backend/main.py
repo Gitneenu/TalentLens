@@ -1,45 +1,47 @@
-from fastapi import FastAPI, UploadFile, File
-from utils.file_handler import upload_to_supabase
-from utils.parser import extract_text
-from database import save_resume, get_all_resumes
-
-import tempfile
+from fastapi import FastAPI, Request
+from parser import extract_text, extract_skills, extract_experience
+from geminiparser import parse_with_gemini
+from config import supabase
 
 app = FastAPI()
 
-
 @app.get("/")
-def home():
-    return {"message": "Smart Talent Engine  🚀"}
+async def root():
+    return {"message": "Welcome to the Resume Parser API"}
 
 
-@app.post("/upload/")
-async def upload_resume(file: UploadFile = File(...)):
-    try:
-        # Save temporarily (needed for parsing)
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
-            tmp.write(file.file.read())
-            temp_path = tmp.name
+@app.post("/parse-bulk")
+async def parse_bulk(request: Request):
+    data = await request.json()
+    files = data.get("files", [])
 
-        # Extract text
-        text = extract_text(temp_path)
+    results = []
 
-        # Upload to Supabase Storage
-        filename, file_url = upload_to_supabase(file)
+    for file in files:
+        file_url = file.get("file_url")
 
-        # Save to DB
-        save_resume(filename, text[:2000])
+        # TEMP (Day 1)
+        #file_path = "sample.pdf"
 
-        return {
-            "status": "success",
-            "file_url": file_url,
-            "preview": text[:300]
+        text = extract_text(file_url)
+
+        skills = extract_skills(text)
+        experience = extract_experience(text)
+
+        parsed_data = {
+            "skills": skills,
+            "experience": experience
         }
 
-    except Exception as e:
-        return {"error": str(e)}
+        supabase.table("resumes").insert({
+            "file_url": file_url,
+            "raw_text": text,
+            "parsed_json": parsed_data
+        }).execute()
 
+        results.append({
+            "file": file_url,
+            "status": "parsed"
+        })
 
-@app.get("/resumes/")
-def get_resumes():
-    return get_all_resumes()
+    return {"results": results}

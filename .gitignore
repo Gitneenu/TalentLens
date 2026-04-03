@@ -1,12 +1,18 @@
-# Python
-__pycache__/
-venv/
 
 # Node
 node_modules/
 
-# Env
-.env
 
 # OS
 .DS_Store
+
+# Ignore the virtual environment
+backend/venv/
+
+# Ignore Python cache files
+**/__pycache__/
+*.pyc
+
+# Ignore environment variables (if you create a .env file later)
+.env
+Testing
