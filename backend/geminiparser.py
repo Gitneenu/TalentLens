@@ -21,6 +21,29 @@ def extract_json(text):
     return None
 
 
+# 🔷 Safe int conversion
+def safe_int(value):
+    try:
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            match = re.search(r'\d+', value)
+            if match:
+                return int(match.group())
+    except:
+        pass
+    return 0
+
+
+# 🔷 Clean skills
+def clean_skills(skills):
+    return list({
+        s.strip().title()
+        for s in skills
+        if isinstance(s, str) and len(s.strip()) > 1
+    })
+
+
 # 🔷 Main function
 def parse_with_gemini(resume_text):
 
@@ -39,20 +62,39 @@ def parse_with_gemini(resume_text):
     Extract:
 
     1. Technical skills
-    2. Total years of experience
+    2. Total years of experience (CALCULATE from dates)
     3. Experience breakdown
 
-    RULES:
-    - Extract skills like Python, JavaScript, HTML, CSS, SQL
-    - Ignore soft skills
-    - If fresher → experience = 0
+    IMPORTANT RULES:
 
-    OUTPUT (STRICT JSON ONLY):
+    - Identify all work experiences with date ranges
+    - Calculate total experience using years mentioned
+
+    Examples:
+    - 2020 - 2022 → 2 years
+    - 2022 - Present → use current year(which is 2026)
+    - Multiple roles → sum durations
+
+    - Internships count as experience (0–1 years)
+    - If no dates → leave as 0(don't guess)
+
+    - Ignore soft skills
+    - Extract only technical skills (Python, SQL, JavaScript, etc.)
+
+    Think step-by-step but return ONLY JSON.
+
+    OUTPUT FORMAT:
 
     {{
       "skills": [],
       "total_experience_years": number,
-      "experience_breakdown": []
+      "experience_breakdown": [
+        {{
+          "title": "",
+          "company": "",
+          "duration": ""
+        }}
+      ]
     }}
 
     Resume:
@@ -73,8 +115,8 @@ def parse_with_gemini(resume_text):
             raise ValueError("Invalid JSON")
 
         return {
-            "skills": list(set(parsed.get("skills", []))),
-            "total_experience_years": int(parsed.get("total_experience_years", 0)),
+            "skills": clean_skills(parsed.get("skills", [])),
+            "total_experience_years": safe_int(parsed.get("total_experience_years", 0)),
             "experience_breakdown": parsed.get("experience_breakdown", [])
         }
 
