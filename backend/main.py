@@ -5,6 +5,7 @@ from parser import extract_text
 from geminiparser import parse_with_gemini
 from database import supabase
 from datetime import datetime
+from ranking import semantic_score, generate_summary
 
 app = FastAPI()
 
@@ -18,6 +19,16 @@ class BulkRequest(BaseModel):
     job_role: str
     batch_id: Optional[str] = None
     files: List[FileItem]
+
+
+# 🔥 Use job_id for ranking
+class JDRequest(BaseModel):
+    job_id: str
+
+
+class JobRequest(BaseModel):
+    title: str
+    description: str
 
 
 # 🔷 Allowed file types
@@ -34,19 +45,31 @@ async def root():
     return {"message": "Welcome to the Resume Parser API"}
 
 
-# 🔷 Bulk Parse Endpoint
+# 🚀 CREATE JOB
+@app.post("/create-job")
+async def create_job(request: JobRequest):
+
+    response = supabase.table("jobs").insert({
+        "title": request.title,
+        "description": request.description
+    }).execute()
+
+    return {
+        "message": "Job created successfully",
+        "job": response.data
+    }
+
+
+# 🚀 BULK UPLOAD (RESUME + CANDIDATE)
 @app.post("/parse-bulk")
 async def parse_bulk(request: BulkRequest):
 
     results = []
-
-    # 🔥 Auto-generate batch_id if not provided
     batch_id = request.batch_id or datetime.now().strftime("%Y-%m-%d")
 
     for file in request.files:
         file_url = file.file_url
 
-        # 🔹 Initialize per-file result
         result_item = {
             "file_url": file_url,
             "status": "processing",
@@ -55,7 +78,7 @@ async def parse_bulk(request: BulkRequest):
             "batch_id": batch_id
         }
 
-        # ❌ Unsupported file type
+        # ❌ Unsupported file
         if not is_valid_file(file_url):
             result_item.update({
                 "status": "failed",
@@ -65,11 +88,11 @@ async def parse_bulk(request: BulkRequest):
             continue
 
         try:
-            # 🔹 Step 1: Extract text
+            # 🔹 Extract text
             text = extract_text(file_url)
             result_item["progress"] = 40
 
-            # ❌ Corrupt / unreadable file
+            # ❌ Corrupt file
             if not text or len(text.strip()) < 50:
                 result_item.update({
                     "status": "failed",
@@ -78,27 +101,34 @@ async def parse_bulk(request: BulkRequest):
                 results.append(result_item)
                 continue
 
-            # 🔹 Step 2: Parse with Gemini
+            # 🔹 Gemini parse
             parsed_data = parse_with_gemini(text)
             result_item["progress"] = 80
 
-            # 🔹 Step 3: Store in Supabase (UPDATED)
-            insert_data = {
+            # 🔹 Insert into resumes
+            resume_res = supabase.table("resumes").insert({
                 "file_url": file_url,
                 "raw_text": text,
                 "parsed_json": parsed_data,
                 "job_role": request.job_role,
                 "batch_id": batch_id
-            }
+            }).execute()
 
-            db_response = supabase.table("resumes").insert(insert_data).execute()
+            resume_id = resume_res.data[0]["id"]
 
-            # ✅ Success
+            # 🔹 Insert into candidates
+            candidate_res = supabase.table("candidates").insert({
+                "name": parsed_data.get("name", "Unknown"),
+                "resume_id": resume_id
+            }).execute()
+
+            candidate_id = candidate_res.data[0]["id"]
+
             result_item.update({
                 "status": "completed",
                 "progress": 100,
-                "parsed": parsed_data,
-                "db_response": db_response.data
+                "candidate_id": candidate_id,
+                "parsed": parsed_data
             })
 
         except Exception as e:
@@ -110,3 +140,70 @@ async def parse_bulk(request: BulkRequest):
         results.append(result_item)
 
     return {"results": results}
+
+
+# 🚀 RANK CANDIDATES (WITH SCORES TABLE)
+@app.post("/rank-candidates")
+async def rank_candidates(request: JDRequest):
+
+    # 🔹 Get job details
+    job = supabase.table("jobs")\
+        .select("*")\
+        .eq("id", request.job_id)\
+        .single()\
+        .execute().data
+
+    job_role = job["title"]
+    jd_text = job["description"]
+
+    # 🔹 Get resumes for that role
+    resumes = supabase.table("resumes")\
+        .select("*")\
+        .eq("job_role", job_role)\
+        .execute().data
+
+    ranked = []
+
+    for r in resumes:
+        parsed = r.get("parsed_json", {})
+
+        # 🔹 Get candidate linked to resume
+        candidate = supabase.table("candidates")\
+            .select("*")\
+            .eq("resume_id", r["id"])\
+            .single()\
+            .execute().data
+
+        candidate_id = candidate["id"]
+
+        # 🔹 AI scoring
+        ai_result = semantic_score(parsed, jd_text)
+        score = ai_result.get("score", 0)
+        reason = ai_result.get("reason", "")
+
+        ranked.append({
+            "candidate_id": candidate_id,
+            "file_url": r["file_url"],
+            "score": score,
+            "reason": reason,
+            "parsed": parsed
+        })
+
+        # 🔥 Store in scores table
+        supabase.table("scores").insert({
+            "candidate_id": candidate_id,
+            "job_id": request.job_id,
+            "score": score
+        }).execute()
+
+    # 🔥 Sort
+    ranked = sorted(ranked, key=lambda x: x["score"], reverse=True)
+
+    # 🔥 Add summary for top 5
+    for i in range(min(5, len(ranked))):
+        ranked[i]["summary"] = generate_summary(
+            ranked[i]["parsed"],
+            jd_text
+        )
+
+    return {"ranked_candidates": ranked}
