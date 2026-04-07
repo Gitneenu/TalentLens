@@ -77,4 +77,8 @@ npm run dev
 ### 🌐 Step 4: Access the Application
 Frontend: http://localhost:5173
 
+Video Demo Link
+
+https://drive.google.com/file/d/1Om_vzj1woGNAMq-_1nejvGOiexC17tQJ/view?usp=sharing
+
 Backend: http://127.0.0.1:8000
