@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import API from "../api";
+const API = import.meta.env.VITE_API_URL;
 
 export default function Rank() {
   const [jobs, setJobs] = useState([]);
