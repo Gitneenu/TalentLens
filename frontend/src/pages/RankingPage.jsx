@@ -57,7 +57,8 @@ export default function Rank() {
 
       // ❗ Prevent mixing inputs
       if ((jobTitle || jobDesc) && jobId) {
-        return alert("Use either dropdown OR manual input");
+        alert("Use either dropdown OR manual input");
+        return;
       }
 
       // 🔥 Manual job creation
@@ -68,10 +69,14 @@ export default function Rank() {
         });
 
         finalJobId = createRes.data.job[0].id;
+
+        // ✅ NEW: Show success message for demo
+        alert("Job added successfully. Now upload resumes to start ranking.");
       }
 
       if (!finalJobId) {
-        return alert("Enter job details or select a job");
+        alert("Enter job details or select a job");
+        return;
       }
 
       // 🔹 Ranking
@@ -81,13 +86,26 @@ export default function Rank() {
 
       const ranked = res.data.ranked_candidates;
 
-      setCandidates(ranked);
+      // ✅ NEW: Handle empty resumes
+      if (!ranked || ranked.length === 0) {
+        setCandidates([]);
+        alert("No resumes found. Please upload resumes to see ranking.");
+        return;
+      }
 
+      setCandidates(ranked);
       await fetchNames(ranked);
 
     } catch (err) {
       console.error(err);
-      alert("Ranking failed");
+
+      // ✅ NEW: Better error handling
+      if (err.response?.data?.message?.includes("No resumes")) {
+        alert("No resumes uploaded yet. Please upload resumes first.");
+      } else {
+        alert("Something went wrong. Please try again.");
+      }
+
     } finally {
       setLoading(false);
     }
@@ -197,10 +215,6 @@ export default function Rank() {
               />
             </div>
 
-            {/* Reason */}
-            <p className="mt-3 text-gray-300">
-              <strong>Why:</strong> {c.reason}
-            </p>
 
             {/* Summary */}
             {c.summary && (

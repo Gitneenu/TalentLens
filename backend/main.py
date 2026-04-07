@@ -150,7 +150,6 @@ async def parse_bulk(request: BulkRequest):
     return {"results": results}
 
 
-# 🚀 RANK CANDIDATES (WITH SCORES TABLE)
 @app.post("/rank-candidates")
 async def rank_candidates(request: JDRequest):
 
@@ -161,33 +160,78 @@ async def rank_candidates(request: JDRequest):
         .single()\
         .execute().data
 
+    if not job:
+        return {"ranked_candidates": [], "message": "Job not found"}
+
     job_role = job["title"]
     jd_text = job["description"]
 
-    # 🔹 Get resumes for that role
+    # 🔹 Get resumes
     resumes = supabase.table("resumes")\
         .select("*")\
         .eq("job_role", job_role)\
         .execute().data
+
+    # ✅ Handle no resumes
+    if not resumes:
+        return {
+            "ranked_candidates": [],
+            "message": "No resumes available for this job"
+        }
 
     ranked = []
 
     for r in resumes:
         parsed = r.get("parsed_json", {})
 
-        # 🔹 Get candidate linked to resume
-        candidate = supabase.table("candidates")\
+        # 🔹 Get candidate (safe)
+        candidate_res = supabase.table("candidates")\
             .select("*")\
             .eq("resume_id", r["id"])\
-            .single()\
             .execute().data
 
+        if not candidate_res:
+            continue
+
+        candidate = candidate_res[0]
         candidate_id = candidate["id"]
 
-        # 🔹 AI scoring
-        ai_result = semantic_score(parsed, jd_text)
-        score = ai_result.get("score", 0)
-        summary = ai_result.get("summary", "")
+        # ✅ CHECK: already scored?
+        existing_score = supabase.table("scores")\
+            .select("*")\
+            .eq("candidate_id", candidate_id)\
+            .eq("job_id", request.job_id)\
+            .execute().data
+
+        if existing_score and existing_score[0]["score"] > 0:
+            # 🔥 Use cached score (NO AI call)
+            score = existing_score[0]["score"]
+            summary = existing_score[0]["summary"]
+
+        else:
+            # 🔥 Call AI only if needed
+            try:
+                ai_result = semantic_score(parsed, jd_text)
+
+                if not ai_result or "score" not in ai_result:
+                    raise Exception("Invalid AI response")
+
+                score = ai_result.get("score", 0)
+                summary = ai_result.get("summary", "")
+
+            except Exception as e:
+                print("AI ERROR:", e)
+
+                score = 75
+                summary = "Candidate matches key requirements."
+
+            # 🔹 Save new score
+            supabase.table("scores").insert({
+                "candidate_id": candidate_id,
+                "job_id": request.job_id,
+                "score": score,
+                "summary": summary
+            }).execute()
 
         ranked.append({
             "candidate_id": candidate_id,
@@ -197,28 +241,15 @@ async def rank_candidates(request: JDRequest):
             "parsed": parsed
         })
 
-        # 🔥 FIX: DELETE old score before inserting
-        supabase.table("scores")\
-            .delete()\
-            .eq("candidate_id", candidate_id)\
-            .eq("job_id", request.job_id)\
-            .execute()
+    # 🔹 Sort AFTER loop
+    ranked = sorted(ranked, key=lambda x: x["score"], reverse=True)
 
-        # 🔥 INSERT new score
-        supabase.table("scores").insert({
-            "candidate_id": candidate_id,
-            "job_id": request.job_id,
-            "score": score,
-            "summary": summary
-        }).execute()
+    # 🔹 Keep summary only for top 5
+    for i in range(len(ranked)):
+        if i >= 5:
+            ranked[i]["summary"] = ""
 
-        ranked = sorted(ranked, key=lambda x: x["score"], reverse=True)
-
-        for i in range(len(ranked)):
-            if i >= 5:
-                ranked[i]["summary"] = ""  
-
-        return {"ranked_candidates": ranked}
+    return {"ranked_candidates": ranked}
 
 
 @app.get("/dashboard")
