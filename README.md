@@ -1,37 +1,56 @@
-# Smart Talent Selection Engine 🚀
+Project Title
 
-An AI-powered system that intelligently screens resumes and ranks candidates based on job descriptions using semantic understanding instead of keyword matching.
+TalentLens – AI-Powered Resume Screening System
 
-## 🔥 Problem
+The Problem
 
-Traditional ATS systems rely on keyword matching, leading to:
+Traditional Applicant Tracking Systems rely heavily on keyword matching, often rejecting qualified candidates who use different but equivalent terminology. With hundreds to thousands of applications per role and only a few seconds spent per resume, recruiters struggle to identify the most suitable candidates accurately. This results in missed talent, biased filtering, and inefficient hiring decisions driven more by keyword optimization than actual skills and experience.
 
-* Missing strong candidates due to synonyms
-* Recruiter fatigue from manual screening
-* Inefficient hiring decisions
+The Solution
 
-## 💡 Solution
+TalentLens automates the resume screening process using AI. It extracts skills and experience from resumes, analyzes them using semantic matching, and ranks candidates based on job requirements. This helps recruiters quickly shortlist the best candidates with improved accuracy and efficiency.
 
-This system uses AI to:
+Tech Stack
 
-* Parse resumes into structured profiles
-* Understand semantic meaning of skills
-* Rank candidates based on job descriptions
-* Provide AI-generated justification for rankings
+1.Programming Languages
+Python
+JavaScript
 
-## 🛠 Tech Stack
+2.Frameworks
+React.js
+FastAPI
 
-* Frontend: React
-* Backend: FastAPI
-* AI: Gemini API
-* Parsing: pdfplumber, python-docx
+3.Database
+Supabase
 
-## 📌 Features (Planned)
+4.APIs / Third-party Tools
+Google Gemini API
+Axios
+Uvicorn
+Git & GitHub
 
-* Resume upload & parsing
-* Semantic skill mapping
-* Candidate ranking dashboard
-* AI-based fit explanation
+Setup Instructions
 
+Step 1: Clone the Repository
+git clone https://github.com/YOUR_USERNAME/talentlens.git
+cd talentlens
 
-Niranjana Ramesh
+Step 2: Backend Setup
+cd backend
+python -m venv venv
+venv\Scripts\activate(windows)
+source venv/bin/activate(Mac or Linux)
+pip install -r requirements.txt
+Create a .env file inside the backend folder and add:
+        GEMINI_API_KEY=your_gemini_api_key
+        SUPABASE_URL=your_supabase_url
+        SUPABASE_KEY=your_supabase_key
+
+Step 3: Frontend Setup
+cd frontend
+npm install
+npm run dev
+
+Step 4: Access the Application
+Frontend: http://localhost:5173
+Backend: http://127.0.0.1:8000
