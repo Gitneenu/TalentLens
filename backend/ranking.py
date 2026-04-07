@@ -8,7 +8,7 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
-# 🔷 Semantic scoring
+# 🔥 Combined function (score + summary only)
 def semantic_score(resume_data, jd_text):
 
     prompt = f"""
@@ -18,15 +18,19 @@ def semantic_score(resume_data, jd_text):
 
     Evaluate:
     - Skill relevance (semantic understanding, not exact match)
-    - Experience depth
+    - Experience depth (VERY IMPORTANT)
     - Role alignment
 
-    Prioritize depth of experience over mere mentions of a skill
+    Prioritize depth of experience over mere mentions of a skill.
 
-    Return STRICT JSON:
+    Tasks:
+    1. Give a compatibility score (0-100)
+    2. Give a 2-sentence "Summary of Fit"
+
+    Return STRICT JSON ONLY:
     {{
-      "score": number (0-100),
-      "reason": ""
+      "score": number,
+      "summary": ""
     }}
 
     Resume:
@@ -36,37 +40,29 @@ def semantic_score(resume_data, jd_text):
     {jd_text}
     """
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt
-    )
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
 
-    parsed = extract_json(response.text)
+        parsed = extract_json(response.text)
 
-    return parsed or {"score": 0, "reason": ""}
+        # 🔥 fallback
+        if not parsed:
+            return {
+                "score": 0,
+                "summary": ""
+            }
 
+        return {
+            "score": parsed.get("score", 0),
+            "summary": parsed.get("summary", "")
+        }
 
-# 🔷 Generate summary
-def generate_summary(resume_data, jd_text):
-
-    prompt = f"""
-    In 2 sentences, explain why this candidate is a good fit for this job.
-
-    Focus on:
-    - relevant skills
-    - experience
-    - strengths
-
-    Resume:
-    {resume_data}
-
-    Job Description:
-    {jd_text}
-    """
-
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt
-    )
-
-    return response.text.strip()
+    except Exception as e:
+        print("Gemini Error:", e)
+        return {
+            "score": 0,
+            "summary": ""
+        }

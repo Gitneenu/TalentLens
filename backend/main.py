@@ -5,10 +5,18 @@ from parser import extract_text
 from geminiparser import parse_with_gemini
 from database import supabase
 from datetime import datetime
-from ranking import semantic_score, generate_summary
+from ranking import semantic_score
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # later restrict this
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 🔷 Request Models
 class FileItem(BaseModel):
@@ -179,31 +187,97 @@ async def rank_candidates(request: JDRequest):
         # 🔹 AI scoring
         ai_result = semantic_score(parsed, jd_text)
         score = ai_result.get("score", 0)
-        reason = ai_result.get("reason", "")
+        summary = ai_result.get("summary", "")
 
         ranked.append({
             "candidate_id": candidate_id,
             "file_url": r["file_url"],
             "score": score,
-            "reason": reason,
+            "summary": summary,
             "parsed": parsed
         })
 
-        # 🔥 Store in scores table
+        # 🔥 FIX: DELETE old score before inserting
+        supabase.table("scores")\
+            .delete()\
+            .eq("candidate_id", candidate_id)\
+            .eq("job_id", request.job_id)\
+            .execute()
+
+        # 🔥 INSERT new score
         supabase.table("scores").insert({
             "candidate_id": candidate_id,
             "job_id": request.job_id,
-            "score": score
+            "score": score,
+            "summary": summary
         }).execute()
 
-    # 🔥 Sort
-    ranked = sorted(ranked, key=lambda x: x["score"], reverse=True)
+        ranked = sorted(ranked, key=lambda x: x["score"], reverse=True)
 
-    # 🔥 Add summary for top 5
-    for i in range(min(5, len(ranked))):
-        ranked[i]["summary"] = generate_summary(
-            ranked[i]["parsed"],
-            jd_text
-        )
+        for i in range(len(ranked)):
+            if i >= 5:
+                ranked[i]["summary"] = ""  
 
-    return {"ranked_candidates": ranked}
+        return {"ranked_candidates": ranked}
+
+
+@app.get("/dashboard")
+async def get_dashboard():
+    jobs = supabase.table("jobs").select("*").execute().data
+
+    dashboard_data = []
+
+    for job in jobs:
+        job_id = job["id"]
+        job_title = job["title"]
+
+        resumes = supabase.table("resumes")\
+            .select("*")\
+            .eq("job_role", job_title)\
+            .execute().data
+
+        resume_count = len(resumes)
+
+        scores = supabase.table("scores")\
+            .select("*")\
+            .eq("job_id", job_id)\
+            .order("score", desc=True)\
+            .limit(5)\
+            .execute().data
+
+        top_candidates = []
+
+        for score in scores:
+            candidate = supabase.table("candidates")\
+                .select("*")\
+                .eq("id", score["candidate_id"])\
+                .single()\
+                .execute().data
+
+            top_candidates.append({
+                "name": candidate["name"],
+                "score": score["score"]
+            })
+
+        dashboard_data.append({
+            "jobs": [
+                {
+                    "id": job_id,
+                    "title": job_title
+                }
+            ],
+            "resume_count": resume_count,
+            "top_candidates": top_candidates
+        })
+
+    return {"jobs": dashboard_data}
+
+@app.get("/candidate/{candidate_id}")
+async def get_candidate(candidate_id: str):
+    candidate = supabase.table("candidates")\
+        .select("*")\
+        .eq("id", candidate_id)\
+        .single()\
+        .execute().data
+
+    return candidate
