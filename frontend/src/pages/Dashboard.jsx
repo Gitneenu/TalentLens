@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-
-const API = import.meta.env.VITE_API_URL;
+import API from "../api";
 
 export default function Dashboard() {
   const [jobs, setJobs] = useState([]);

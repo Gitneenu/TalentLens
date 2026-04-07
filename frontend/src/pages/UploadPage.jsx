@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-const API = import.meta.env.VITE_API_URL;
+import API from "../api";
 
 export default function Upload() {
   const [input, setInput] = useState("");
